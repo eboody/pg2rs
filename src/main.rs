@@ -12,6 +12,7 @@ use tokio_postgres::{Error, NoTls};
 const CRATE_POSTGRES: &str = "postgres";
 const CRATE_SQLX: &str = "sqlx";
 const CRATE_TOKIO_POSTGRES: &str = "tokio_postgres";
+const CRATE_ORMLITE: &str = "ormlite";
 
 extern crate pretty_env_logger;
 #[macro_use]
@@ -107,7 +108,12 @@ async fn main() -> Result<(), Error> {
                 .short('w')
                 .takes_value(true)
                 .default_value("postgres")
-                .possible_values([CRATE_POSTGRES, CRATE_SQLX, CRATE_TOKIO_POSTGRES])
+                .possible_values([
+                    CRATE_POSTGRES,
+                    CRATE_SQLX,
+                    CRATE_TOKIO_POSTGRES,
+                    CRATE_ORMLITE,
+                ])
                 .env("POSTGRES_CRATE")
                 .help("Postgres crate"),
         )
@@ -347,6 +353,13 @@ async fn main() -> Result<(), Error> {
             writeln!(output, "use {}::row::Row;", postgres_crate).unwrap();
             writeln!(output, "use {}::types::{{ToSql, FromSql}};", postgres_crate).unwrap();
         }
+        CRATE_ORMLITE => {
+            writeln!(output, "// Make sure to add `ormlite = {{ version = \"0.22\", features = [\"postgres\", \"json\", \"time\", \"uuid\"] }}` to Cargo.toml").unwrap();
+            writeln!(output, "use ormlite::Model;").unwrap();
+            writeln!(output, "use serde_json::Value;").unwrap();
+            writeln!(output, "use uuid::Uuid;").unwrap();
+            writeln!(output, "type Json = serde_json::Value;").unwrap();
+        }
         CRATE_SQLX => {}
         _ => {}
     }
@@ -403,7 +416,7 @@ fn process_enums(
                 writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
                 writeln!(output, "#[postgres(name = \"{}\")]", enum_name).unwrap();
             }
-            CRATE_SQLX => {
+            CRATE_SQLX | CRATE_ORMLITE => {
                 writeln!(output, "#[derive(Debug, sqlx::Type)]").unwrap();
                 writeln!(output, "#[sqlx(type_name = \"{}\")]", enum_name).unwrap();
             }
@@ -416,7 +429,7 @@ fn process_enums(
                 CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
                     writeln!(output, "    #[postgres(name = \"{}\")]", variant).unwrap();
                 }
-                CRATE_SQLX => {
+                CRATE_SQLX | CRATE_ORMLITE => {
                     writeln!(output, "    #[sqlx(rename = \"{}\")]", variant).unwrap();
                 }
                 _ => {}
@@ -467,14 +480,18 @@ fn process_tables_data(
             CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
                 writeln!(output, "#[derive(Debug, ToSql, FromSql{custom_traits})]").unwrap();
             }
-            CRATE_SQLX => {
+            CRATE_SQLX | CRATE_ORMLITE => {
                 writeln!(output, "#[derive(Debug, sqlx::FromRow{custom_traits})]").unwrap();
             }
             _ => {}
         }
         writeln!(output, "pub struct {} {{", table_name.to_case(Case::Camel)).unwrap();
         for column in columns_properties {
-            let column_name_snake_case = column.name.to_case(Case::Snake);
+            let mut column_name_snake_case = column.name.to_case(Case::Snake);
+            if column_name_snake_case == "type" && postgres_crate == CRATE_ORMLITE {
+                writeln!(output, "    #[ormlite(column = \"type\")]",).unwrap();
+                column_name_snake_case = "type_".to_string();
+            }
             if postgres_crate == CRATE_SQLX && column_name_snake_case != column.name {
                 writeln!(output, "    #[sqlx(rename = \"{}\")]", column.name).unwrap();
             }
