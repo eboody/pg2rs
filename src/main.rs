@@ -1,25 +1,26 @@
-use clap::{Arg, command};
+use clap::{command, Arg};
 use convert_case::{Case, Casing};
 use futures::future;
-use inflection::{singular};
+use inflection::singular;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fs::File;
-use std::io::{Write as IoWrite};
-use std::sync::{Arc};
-use tokio_postgres::{NoTls, Error};
+use std::io::Write as IoWrite;
+use std::sync::Arc;
+use tokio_postgres::{Error, NoTls};
 
 const CRATE_POSTGRES: &str = "postgres";
 const CRATE_SQLX: &str = "sqlx";
 const CRATE_TOKIO_POSTGRES: &str = "tokio_postgres";
 
 extern crate pretty_env_logger;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 #[derive(Debug)]
 struct ColumnProperties {
     name: String,
-    rust_type: String
+    rust_type: String,
 }
 
 #[tokio::main]
@@ -27,97 +28,130 @@ async fn main() -> Result<(), Error> {
     pretty_env_logger::try_init_custom_env("LOG_LEVEL").unwrap();
 
     let matches = command!()
-        .arg(Arg::new("connection-string")
-            .required_unless_present_all(
-                &["user", "password", "host", "port", "database"]
-            )
-            .short('c')
-            .long("connection-string")
-            .takes_value(true)
-            .env("POSTGRES_CONNECTION_STRING")
-            .help("full connection string instead of separate credentials \
-              in a form postgresql://username:password@host:port/dbname"))
-        .arg(Arg::new("user")
-            .long("user")
-            .short('u')
-            .required_unless_present("connection-string")
-            .conflicts_with("connection-string")
-            .takes_value(true)
-            .env("POSTGRES_USER"))
-        .arg(Arg::new("password")
-            .long("password")
-            .short('p')
-            .required_unless_present("connection-string")
-            .conflicts_with("connection-string")
-            .takes_value(true)
-            .env("POSTGRES_PASSWORD"))
-        .arg(Arg::new("host")
-            .long("host")
-            .short('h')
-            .required_unless_present("connection-string")
-            .conflicts_with("connection-string")
-            .takes_value(true)
-            .env("POSTGRES_HOST"))
-        .arg(Arg::new("port")
-            .long("port")
-            .short('r')
-            .required_unless_present("connection-string")
-            .conflicts_with("connection-string")
-            .takes_value(true)
-            .validator(|s| s.parse::<usize>())
-            .env("POSTGRES_PORT"))
-        .arg(Arg::new("database")
-            .long("database")
-            .short('d')
-            .required_unless_present("connection-string")
-            .conflicts_with("connection-string")
-            .takes_value(true)
-            .env("POSTGRES_DATABASE"))
-        .arg(Arg::new("schema")
-            .long("schema")
-            .short('s')
-            .takes_value(true)
-            .required(true)
-            .env("POSTGRES_SCHEMA"))
-        .arg(Arg::new("table")
-            .long("table")
-            .short('t')
-            .takes_value(true)
-            .env("POSTGRES_TABLE"))
-        .arg(Arg::new("postgres_crate")
-            .long("postgres_crate")
-            .short('w')
-            .takes_value(true)
-            .default_value("postgres")
-            .possible_values(&[CRATE_POSTGRES, CRATE_SQLX, CRATE_TOKIO_POSTGRES])
-            .env("POSTGRES_CRATE")
-            .help("Postgres crate"))
-        .arg(Arg::new("singularize-table-names")
-            .long("singularize-table-names")
-            .short('z')
-            .required(false)
-            .takes_value(false)
-            .env("SINGULARIZE_TABLE_NAMES"))
-        .arg(Arg::new("use-chrono-crate")
-            .long("use-chrono-crate")
-            .short('n')
-            .required(false)
-            .takes_value(false)
-            .env("USE_CHRONO_CRATE")
-            .help("use chrono DateTime for timestamps"))
-        .arg(Arg::new("use-rust-decimal")
-            .long("use-rust-decimal")
-            .short('m')
-            .required(false)
-            .takes_value(false)
-            .env("USE_RUST_DECIMAL")
-            .help("use chrono DateTime for timestamps"))
-        .arg(Arg::new("output_file")
-            .long("output_file")
-            .short('o')
-            .takes_value(true)
-            .env("OUTPUT_FILE")
-            .help("output file path"))
+        .arg(
+            Arg::new("connection-string")
+                .required_unless_present_all(["user", "password", "host", "port", "database"])
+                .short('c')
+                .long("connection-string")
+                .takes_value(true)
+                .env("POSTGRES_CONNECTION_STRING")
+                .help(
+                    "full connection string instead of separate credentials \
+              in a form postgresql://username:password@host:port/dbname",
+                ),
+        )
+        .arg(
+            Arg::new("user")
+                .long("user")
+                .short('u')
+                .required_unless_present("connection-string")
+                .conflicts_with("connection-string")
+                .takes_value(true)
+                .env("POSTGRES_USER"),
+        )
+        .arg(
+            Arg::new("password")
+                .long("password")
+                .short('p')
+                .required_unless_present("connection-string")
+                .conflicts_with("connection-string")
+                .takes_value(true)
+                .env("POSTGRES_PASSWORD"),
+        )
+        .arg(
+            Arg::new("host")
+                .long("host")
+                .short('h')
+                .required_unless_present("connection-string")
+                .conflicts_with("connection-string")
+                .takes_value(true)
+                .env("POSTGRES_HOST"),
+        )
+        .arg(
+            Arg::new("port")
+                .long("port")
+                .short('r')
+                .required_unless_present("connection-string")
+                .conflicts_with("connection-string")
+                .takes_value(true)
+                .validator(|s| s.parse::<usize>())
+                .env("POSTGRES_PORT"),
+        )
+        .arg(
+            Arg::new("database")
+                .long("database")
+                .short('d')
+                .required_unless_present("connection-string")
+                .conflicts_with("connection-string")
+                .takes_value(true)
+                .env("POSTGRES_DATABASE"),
+        )
+        .arg(
+            Arg::new("schema")
+                .long("schema")
+                .short('s')
+                .takes_value(true)
+                .required(true)
+                .env("POSTGRES_SCHEMA"),
+        )
+        .arg(
+            Arg::new("table")
+                .long("table")
+                .short('t')
+                .takes_value(true)
+                .env("POSTGRES_TABLE"),
+        )
+        .arg(
+            Arg::new("postgres_crate")
+                .long("postgres_crate")
+                .short('w')
+                .takes_value(true)
+                .default_value("postgres")
+                .possible_values([CRATE_POSTGRES, CRATE_SQLX, CRATE_TOKIO_POSTGRES])
+                .env("POSTGRES_CRATE")
+                .help("Postgres crate"),
+        )
+        .arg(
+            Arg::new("singularize-table-names")
+                .long("singularize-table-names")
+                .short('z')
+                .required(false)
+                .takes_value(false)
+                .env("SINGULARIZE_TABLE_NAMES"),
+        )
+        .arg(
+            Arg::new("use-chrono-crate")
+                .long("use-chrono-crate")
+                .short('n')
+                .required(false)
+                .takes_value(false)
+                .env("USE_CHRONO_CRATE")
+                .help("use chrono DateTime for timestamps"),
+        )
+        .arg(
+            Arg::new("use-rust-decimal")
+                .long("use-rust-decimal")
+                .short('m')
+                .required(false)
+                .takes_value(false)
+                .env("USE_RUST_DECIMAL")
+                .help("use chrono DateTime for timestamps"),
+        )
+        .arg(
+            Arg::new("output_file")
+                .long("output_file")
+                .short('o')
+                .takes_value(true)
+                .env("OUTPUT_FILE")
+                .help("output file path"),
+        )
+        .arg(
+            Arg::new("split_struct_dir")
+                .long("split-struct-dir")
+                .takes_value(true)
+                .env("SPLIT_STRUCT_DIR")
+                .help("Directory to output structs as separate files"),
+        )
         .get_matches();
 
     let connection_string = match matches.value_of("connection-string") {
@@ -146,23 +180,27 @@ async fn main() -> Result<(), Error> {
 
     let use_chrono_crate = matches.is_present("use-chrono-crate");
     debug!("Use chrono crate: {}", use_chrono_crate);
-    let timestamp_type =
-      if use_chrono_crate { "DateTime<Utc>" } else { "String" };
+    let timestamp_type = if use_chrono_crate {
+        "DateTime<Utc>"
+    } else {
+        "String"
+    };
 
     let use_rust_decimal = matches.is_present("use-rust-decimal");
     debug!("Use rust-decimal: {}", use_rust_decimal);
-    let numeric_type =
-      if use_rust_decimal { "Decimal" } else { "String" };
-
-    let output_file = match matches.value_of("output_file") {
-        Some(value) => { value }
-        None => ""
+    let numeric_type = if use_rust_decimal {
+        "Decimal"
+    } else {
+        "String"
     };
+
+    let output_file = matches.value_of("output_file").unwrap_or_default();
     debug!("Output file: \"{}\"", output_file);
 
     // Connect to the database.
-    let (client, connection) =
-        tokio_postgres::connect(&connection_string, NoTls).await.unwrap();
+    let (client, connection) = tokio_postgres::connect(&connection_string, NoTls)
+        .await
+        .unwrap();
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("connection error: {}", e);
@@ -174,15 +212,20 @@ async fn main() -> Result<(), Error> {
         Some(s) => vec![String::from(s)], // assume user awareness about table presence
         None => {
             debug!("List tables in schema '{}'", schema);
-            client.query(
-                "SELECT a.relname AS name FROM pg_class a
+            client
+                .query(
+                    "SELECT a.relname AS name FROM pg_class a
                     LEFT OUTER JOIN pg_description b ON b.objsubid = 0 AND a.oid = b.objoid
                     WHERE a.relnamespace = (
                     SELECT oid FROM pg_namespace WHERE nspname = $1
-                    ) AND a.relkind = 'r' ORDER BY a.relname;", &[&schema]
-            ).await.unwrap().iter().map( | row | {
-                row.get(0)
-            }).collect()
+                    ) AND a.relkind = 'r' ORDER BY a.relname;",
+                    &[&schema],
+                )
+                .await
+                .unwrap()
+                .iter()
+                .map(|row| row.get(0))
+                .collect()
         }
     };
     if tables_list.is_empty() {
@@ -193,62 +236,95 @@ async fn main() -> Result<(), Error> {
     let client_arc = Arc::new(client);
     debug!("Tables: {:?}", tables_list);
     let tables_data: BTreeMap<String, Vec<ColumnProperties>> = BTreeMap::from_iter(
-      future::join_all(tables_list.iter().map(| table_name | {
-        let client_clone = client_arc.clone();
-        async move {
-        debug!("List columns for table '{}'", table_name);
-        let columns_data: Vec<ColumnProperties> = client_clone.query(
-            "SELECT column_name, udt_name, is_nullable
+        future::join_all(tables_list.iter().map(|table_name| {
+            let client_clone = client_arc.clone();
+            async move {
+                debug!("List columns for table '{}'", table_name);
+                let columns_data: Vec<ColumnProperties> = client_clone
+                    .query(
+                        "SELECT column_name, udt_name, is_nullable
              FROM information_schema.columns
              WHERE table_schema = $1 AND table_name = $2
              ORDER BY ordinal_position;",
-             &[&schema, &table_name]
-        ).await.unwrap().iter().map( | row | {
-            let is_nullable = row.get(2);
-            ColumnProperties {
-                name: row.get(0),
-                rust_type: match row.get(1) {
-                    "bytea" => type_str(is_nullable, "Vec<u8>"),
-                    "text" => type_str(is_nullable, "String"),
-                    "varchar"|"character varying"|"bpchar" => type_str(is_nullable, "String"),
-                    "char"|"character" => type_str(is_nullable, "i8"),
-                    "smallint"|"int2"|"smallserial"|"serial2" => type_str(is_nullable, "i16"),
-                    "integer"|"int"|"int4"|"serial"|"serial4" => type_str(is_nullable, "i32"),
-                    "bigint"|"int8"|"bigserial"|"serial8" => type_str(is_nullable, "i64"),
-                    "oid" => type_str(is_nullable, "u32"),
-                    "real"|"float4" => type_str(is_nullable, "f32"),
-                    "double precision"|"float8" => type_str(is_nullable, "f64"),
-                    "bool"|"boolean" => type_str(is_nullable, "bool"),
-                    "numeric"|"decimal" => type_str(is_nullable, numeric_type),
-                    "timestamp"|"timestamptz" => type_str(is_nullable, timestamp_type),
-                    _ => type_str_transform_case(
-                        is_nullable, row.get(1), Case::UpperCamel) // enums etc
+                        &[&schema, &table_name],
+                    )
+                    .await
+                    .unwrap()
+                    .iter()
+                    .map(|row| {
+                        let is_nullable = row.get(2);
+                        ColumnProperties {
+                            name: row.get(0),
+                            rust_type: match row.get(1) {
+                                "bytea" => type_str(is_nullable, "Vec<u8>"),
+                                "text" => type_str(is_nullable, "String"),
+                                "varchar" | "character varying" | "bpchar" => {
+                                    type_str(is_nullable, "String")
+                                }
+                                "char" | "character" => type_str(is_nullable, "i8"),
+                                "smallint" | "int2" | "smallserial" | "serial2" => {
+                                    type_str(is_nullable, "i16")
+                                }
+                                "integer" | "int" | "int4" | "serial" | "serial4" => {
+                                    type_str(is_nullable, "i32")
+                                }
+                                "bigint" | "int8" | "bigserial" | "serial8" => {
+                                    type_str(is_nullable, "i64")
+                                }
+                                "oid" => type_str(is_nullable, "u32"),
+                                "real" | "float4" => type_str(is_nullable, "f32"),
+                                "double precision" | "float8" => type_str(is_nullable, "f64"),
+                                "bool" | "boolean" => type_str(is_nullable, "bool"),
+                                "numeric" | "decimal" => type_str(is_nullable, numeric_type),
+                                "timestamp" | "timestamptz" => {
+                                    type_str(is_nullable, timestamp_type)
+                                }
+                                _ => type_str_transform_case(
+                                    is_nullable,
+                                    row.get(1),
+                                    Case::UpperCamel,
+                                ), // enums etc
+                            },
+                        }
+                    })
+                    .collect();
+                let mut result_table_name: String = table_name.to_string();
+                if singularize_table_names {
+                    result_table_name = singular::<_, String>(table_name);
+                    debug!("singularized table name: {}", table_name);
                 }
+                (result_table_name, columns_data)
             }
-        }).collect();
-        let mut result_table_name: String = table_name.to_string();
-        if  singularize_table_names {
-            result_table_name = singular::<_, String>(table_name);
-            debug!("singularized table name: {}", table_name);
-        }
-        (result_table_name, columns_data)
-      }
-      })).await.into_iter());
+        }))
+        .await
+        .into_iter(),
+    );
 
     debug!("tables_data: {:#?}", tables_data);
 
-    let enums_data: BTreeMap<String, Vec<String>> = client_arc.clone().query(
-        "SELECT n.nspname AS enum_schema,  
+    let enums_data: BTreeMap<String, Vec<String>> = client_arc
+        .clone()
+        .query(
+            "SELECT n.nspname AS enum_schema,  
             t.typname AS enum_name,
             string_agg(e.enumlabel, ',') AS enum_value
             FROM pg_type t 
             JOIN pg_enum e ON t.oid = e.enumtypid  
             JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
             WHERE n.nspname = $1
-            GROUP BY enum_schema, enum_name;", &[&schema]
-    ).await.unwrap().iter().map( | row | {
-        (row.get(1), row.get::<_, &str>(2).split(',').map( | i | { String::from(i) }).collect())
-    }).collect();
+            GROUP BY enum_schema, enum_name;",
+            &[&schema],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row.get(1),
+                row.get::<_, &str>(2).split(',').map(String::from).collect(),
+            )
+        })
+        .collect();
     debug!("Enums: {:?}", enums_data);
 
     let mut output = String::new();
@@ -262,8 +338,8 @@ async fn main() -> Result<(), Error> {
         CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
             writeln!(output, "use {}::row::Row;", postgres_crate).unwrap();
             writeln!(output, "use {}::types::{{ToSql, FromSql}};", postgres_crate).unwrap();
-        },
-        CRATE_SQLX => {},
+        }
+        CRATE_SQLX => {}
         _ => {}
     }
 
@@ -277,9 +353,25 @@ async fn main() -> Result<(), Error> {
         writeln!(output).unwrap();
         writeln!(output, "use rust_decimal::Decimal;").unwrap();
     }
-    
+
     process_enums(postgres_crate, &enums_data, &mut output);
-    process_tables_data(postgres_crate, &tables_data, &mut output);
+
+    let split_struct_dir = matches.value_of("split_struct_dir");
+
+    if let Some(dir) = split_struct_dir {
+        std::fs::create_dir_all(split_struct_dir.unwrap()).unwrap();
+        println!(
+            "Splitting structs into separate files in directory: {}",
+            dir
+        );
+    } else if output_file.is_empty() {
+        print!("{}", output);
+    } else {
+        let mut fp = File::create(output_file).unwrap();
+        write!(fp, "{}", output).unwrap();
+    }
+
+    process_tables_data(postgres_crate, &tables_data, &mut output, split_struct_dir);
 
     if output_file.is_empty() {
         print!("{}", output);
@@ -294,7 +386,7 @@ fn type_str<'a>(nullable: &'a str, type_name: &'a str) -> String {
     match nullable {
         "YES" => format!("Option<{}>", type_name),
         "NO" => type_name.to_string(),
-        _ => type_name.to_string()
+        _ => type_name.to_string(),
     }
 }
 
@@ -303,22 +395,26 @@ fn type_str_transform_case<'a>(nullable: &'a str, type_name: &'a str, case: Case
     match nullable {
         "YES" => format!("Option<{}>", type_name),
         "NO" => type_name,
-        _ => type_name
+        _ => type_name,
     }
 }
 
-fn process_enums(postgres_crate: &str, enums_data: &BTreeMap<String, Vec<String>>, output: &mut String) {
+fn process_enums(
+    postgres_crate: &str,
+    enums_data: &BTreeMap<String, Vec<String>>,
+    output: &mut String,
+) {
     for (enum_name, variants) in enums_data {
         writeln!(output).unwrap();
         match postgres_crate {
             CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
                 writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
                 writeln!(output, "#[postgres(name = \"{}\")]", enum_name).unwrap();
-            },
+            }
             CRATE_SQLX => {
                 writeln!(output, "#[derive(Debug, sqlx::Type)]").unwrap();
                 writeln!(output, "#[sqlx(type_name = \"{}\")]", enum_name).unwrap();
-            },
+            }
             _ => {}
         }
         let enum_name = enum_name.to_case(Case::UpperCamel);
@@ -327,74 +423,128 @@ fn process_enums(postgres_crate: &str, enums_data: &BTreeMap<String, Vec<String>
             match postgres_crate {
                 CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
                     writeln!(output, "    #[postgres(name = \"{}\")]", variant).unwrap();
-                },
+                }
                 CRATE_SQLX => {
                     writeln!(output, "    #[sqlx(rename = \"{}\")]", variant).unwrap();
-                },
+                }
                 _ => {}
             }
             writeln!(output, "    {},", variant.to_case(Case::UpperCamel)).unwrap();
         }
         writeln!(output, "}}").unwrap();
         writeln!(output).unwrap();
-        writeln!(output, "impl FromStr for {} {{
+        writeln!(
+            output,
+            "impl FromStr for {} {{
     type Err = ();
     fn from_str(input: &str) -> Result<{}, Self::Err> {{
-        match input {{", enum_name, enum_name).unwrap();
+        match input {{",
+            enum_name, enum_name
+        )
+        .unwrap();
         for variant in variants {
             writeln!(
-                output, "            \"{}\"  => Ok({}::{}),",
-                variant, enum_name, variant.to_case(Case::UpperCamel)).unwrap();
+                output,
+                "            \"{}\"  => Ok({}::{}),",
+                variant,
+                enum_name,
+                variant.to_case(Case::UpperCamel)
+            )
+            .unwrap();
         }
-        writeln!(output, "            _      => Err(()),
+        writeln!(
+            output,
+            "            _      => Err(()),
         }}
     }}
-}}").unwrap();
+}}"
+        )
+        .unwrap();
     }
 }
 
-fn process_tables_data(postgres_crate: &str, tables_data: &BTreeMap<String, Vec<ColumnProperties>>, output: &mut String) {
+fn process_tables_data(
+    postgres_crate: &str,
+    tables_data: &BTreeMap<String, Vec<ColumnProperties>>,
+    output: &mut String,
+    split_struct_dir: Option<&str>, // dir for split structs
+) {
     for (table_name, columns_properties) in tables_data {
-        writeln!(output).unwrap();
+        let mut struct_output = String::new();
+        if split_struct_dir.is_some() {
+            match postgres_crate {
+                CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+                    writeln!(struct_output, "use {}::row::Row;", postgres_crate).unwrap();
+                    writeln!(
+                        struct_output,
+                        "use {}::types::{{ToSql, FromSql}};",
+                        postgres_crate
+                    )
+                    .unwrap();
+                }
+                CRATE_SQLX => {
+                    writeln!(struct_output, "use sqlx::FromRow;").unwrap();
+                }
+                _ => {}
+            }
+            writeln!(struct_output).unwrap();
+        }
+
         match postgres_crate {
             CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
-                writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
-            },
+                writeln!(struct_output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
+            }
             CRATE_SQLX => {
-                writeln!(output, "#[derive(Debug, sqlx::FromRow)]").unwrap();
-            },
+                writeln!(struct_output, "#[derive(Debug, FromRow)]").unwrap();
+            }
             _ => {}
         }
-        writeln!(output, "pub struct {} {{", table_name).unwrap();
+        writeln!(struct_output, "pub struct {} {{", table_name).unwrap();
         for column in columns_properties {
             let column_name_snake_case = column.name.to_case(Case::Snake);
             if postgres_crate == CRATE_SQLX && column_name_snake_case != column.name {
-                writeln!(output, "    #[sqlx(rename = \"{}\")]", column.name).unwrap();
+                writeln!(struct_output, "    #[sqlx(rename = \"{}\")]", column.name).unwrap();
             }
-            writeln!(output,
+            writeln!(
+                struct_output,
                 "    pub {}: {},",
-                column.name.to_case(Case::Snake), column.rust_type
-            ).unwrap();
+                column.name.to_case(Case::Snake),
+                column.rust_type
+            )
+            .unwrap();
         }
-        writeln!(output, "}}").unwrap();
+        writeln!(struct_output, "}}").unwrap();
+
         match postgres_crate {
             CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
-                writeln!(output).unwrap();
-                writeln!(output, "impl From<Row> for {} {{", table_name).unwrap();
-                writeln!(output, "    fn from(row: Row) -> Self {{").unwrap();
-                writeln!(output, "        Self {{").unwrap();
+                writeln!(struct_output).unwrap();
+                writeln!(struct_output, "impl From<Row> for {} {{", table_name).unwrap();
+                writeln!(struct_output, "    fn from(row: Row) -> Self {{").unwrap();
+                writeln!(struct_output, "        Self {{").unwrap();
                 for column in columns_properties {
-                    writeln!(output,
+                    writeln!(
+                        struct_output,
                         "            {}: row.get(\"{}\"),",
-                        column.name.to_case(Case::Snake), column.name
-                    ).unwrap();
+                        column.name.to_case(Case::Snake),
+                        column.name
+                    )
+                    .unwrap();
                 }
-                writeln!(output, "        }}").unwrap();
-                writeln!(output, "    }}").unwrap();
-                writeln!(output, "}}").unwrap();
-            },
-            CRATE_SQLX => {},
+                writeln!(struct_output, "        }}").unwrap();
+                writeln!(struct_output, "    }}").unwrap();
+                writeln!(struct_output, "}}").unwrap();
+            }
+            CRATE_SQLX => {}
             _ => {}
+        }
+
+        // write the struct to individual files or append to global output
+        if let Some(dir) = split_struct_dir {
+            let file_path = format!("{}/{}.rs", dir, table_name.to_case(Case::Snake));
+            let mut file = File::create(&file_path).unwrap();
+            file.write_all(struct_output.as_bytes()).unwrap();
+        } else {
+            output.push_str(&struct_output);
         }
     }
 }
