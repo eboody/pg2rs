@@ -498,7 +498,7 @@ fn process_tables_data(
             writeln!(
                 output,
                 "    pub {}: {},",
-                column.name.to_case(Case::Snake),
+                column.name.to_case(Case::Pascal),
                 column.rust_type
             )
             .unwrap();
