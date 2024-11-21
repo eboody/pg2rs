@@ -472,7 +472,7 @@ fn process_tables_data(
             }
             _ => {}
         }
-        writeln!(output, "pub struct {} {{", table_name).unwrap();
+        writeln!(output, "pub struct {} {{", table_name.to_case(Case::Camel)).unwrap();
         for column in columns_properties {
             let column_name_snake_case = column.name.to_case(Case::Snake);
             if postgres_crate == CRATE_SQLX && column_name_snake_case != column.name {
