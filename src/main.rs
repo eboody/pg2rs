@@ -355,8 +355,6 @@ async fn main() -> Result<(), Error> {
         }
         CRATE_ORMLITE => {
             writeln!(output, "// Make sure to add `ormlite = {{ version = \"0.22\", features = [\"postgres\", \"json\", \"time\", \"uuid\"] }}` to Cargo.toml").unwrap();
-            writeln!(output, "use ormlite::Model;").unwrap();
-            writeln!(output, "use serde_json::Value;").unwrap();
             writeln!(output, "use uuid::Uuid;").unwrap();
             writeln!(output, "type Json = serde_json::Value;").unwrap();
         }
@@ -480,13 +478,16 @@ fn process_tables_data(
             CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
                 writeln!(output, "#[derive(Debug, ToSql, FromSql{custom_traits})]").unwrap();
             }
-            CRATE_SQLX | CRATE_ORMLITE => {
+            CRATE_SQLX => {
                 writeln!(output, "#[derive(Debug, sqlx::FromRow{custom_traits})]").unwrap();
+            }
+            CRATE_ORMLITE => {
+                writeln!(output, "#[derive(Debug, ormlite::Model{custom_traits})]").unwrap();
             }
             _ => {}
         }
-        writeln!(output, "pub struct {} {{", table_name.to_case(Case::Camel)).unwrap();
-        for column in columns_properties {
+        writeln!(output, "pub struct {} {{", table_name.to_case(Case::Pascal)).unwrap();
+        for (index, column) in columns_properties.iter().enumerate() {
             let mut column_name_snake_case = column.name.to_case(Case::Snake);
             if column_name_snake_case == "type" && postgres_crate == CRATE_ORMLITE {
                 writeln!(output, "    #[ormlite(column = \"type\")]",).unwrap();
@@ -495,13 +496,17 @@ fn process_tables_data(
             if postgres_crate == CRATE_SQLX && column_name_snake_case != column.name {
                 writeln!(output, "    #[sqlx(rename = \"{}\")]", column.name).unwrap();
             }
-            writeln!(
-                output,
-                "    pub {}: {},",
-                column.name.to_case(Case::Pascal),
-                column.rust_type
-            )
-            .unwrap();
+
+            let field_name = column.name.to_case(Case::Snake);
+
+            if field_name == "type" {
+                writeln!(output, "    pub type_: {},", column.rust_type).unwrap();
+            } else {
+                if index == 0 && postgres_crate == CRATE_ORMLITE {
+                    writeln!(output, "    #[ormlite(primary_key)]").unwrap();
+                }
+                writeln!(output, "    pub {}: {},", field_name, column.rust_type).unwrap();
+            }
         }
         writeln!(output, "}}").unwrap();
         match postgres_crate {
